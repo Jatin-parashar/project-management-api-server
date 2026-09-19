@@ -68,6 +68,33 @@ See `.env.example` for the full list. Notable ones:
 
 All business routes are prefixed `/api/v1/` (global prefix `api` + URI versioning, set as the default in `main.ts`) — e.g. `POST /api/v1/auth/login/password`, `GET /api/v1/workspaces`. `GET /` and `GET /health` are deliberately excluded from both the `api` prefix and versioning (`VERSION_NEUTRAL`) and public, since infra tooling (load balancers, uptime monitors) hitting a health check shouldn't need to know or care about API prefixes/versions.
 
+## Deployment
+
+Deployed via [Northflank](https://northflank.com) (free tier — chosen over Render/Koyeb, which sleep on inactivity, and over Fly.io, which dropped its free tier in 2024; a sleeping backend can't hold WebSocket connections open). Northflank builds and runs the repo's `Dockerfile` directly on every push to `develop` (native Git integration — GitHub Actions is CI-only here, not the deploy mechanism).
+
+**Northflank setup (one-time, via their dashboard):**
+
+1. Create a free account, create a project, add a service from this GitHub repo.
+2. Build type: Dockerfile (uses the repo's `Dockerfile` as-is).
+3. Branch to track: `develop`.
+4. Port: `3000` (matches `EXPOSE 3000` in the `Dockerfile`).
+5. Set these environment variables/secrets in the Northflank dashboard (never commit them):
+
+   | Var                 | Value                                                                |
+   | ------------------- | -------------------------------------------------------------------- |
+   | `NODE_ENV`          | `production`                                                         |
+   | `DATABASE_URL`      | Neon pooled connection string                                        |
+   | `JWT_ACCESS_SECRET` | freshly generated random value, not the local-dev one                |
+   | `WEBAUTHN_RP_ID`    | the production domain (e.g. `your-app.vercel.app`), no protocol/port |
+   | `WEBAUTHN_ORIGIN`   | the production origin, e.g. `https://your-app.vercel.app`            |
+   | `CLIENT_ORIGIN`     | same as `WEBAUTHN_ORIGIN` — used for CORS                            |
+   | `CLOUDINARY_*`      | production Cloudinary credentials                                    |
+
+6. After the first successful deploy, run `npx prisma migrate deploy` against the Neon database (from a local machine with `DATABASE_URL` pointed at Neon, or via Northflank's one-off job/shell feature) — this Dockerfile copies `prisma/` into the runtime image for exactly this purpose but does not run migrations automatically on boot.
+7. Once Vercel's URL is known, come back and correct `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN`/`CLIENT_ORIGIN` if they were set as placeholders first.
+
+**Branch protection** (manual, no `gh` CLI needed): GitHub repo → Settings → Branches → Add branch protection rule → branch name pattern `develop` → enable "Require status checks to pass before merging" → search for and select `build-and-test` (this repo's CI job name) → Save. This makes CI a real gate: a PR can't merge into `develop` (and therefore can't trigger a Northflank deploy) while lint/format/build/test are failing.
+
 ## Viewing data
 
 Prisma Studio (`npx prisma studio`) has a known, currently-unpatched bug on Windows + PostgreSQL ([prisma/prisma#29348](https://github.com/prisma/prisma/issues/29348)) — it fails to load schema metadata. Use **pgAdmin** instead: register a server pointing at `localhost:5432`, credentials as in `.env`.
