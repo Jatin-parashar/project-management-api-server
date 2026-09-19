@@ -1,114 +1,108 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Project Management — Server
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS REST API backend. React client lives in the sibling `client` folder/repo.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- **Framework:** NestJS 12 (ESM + Vitest)
+- **Database:** PostgreSQL 17, accessed via **Prisma 7** (pinned to the stable `7.x` line — do **not** upgrade to `8.x` while it's still a release candidate)
+- **Auth:** WebAuthn/Passkeys (`@simplewebauthn/server`) as primary, email+password (`argon2`) as fallback; JWT access tokens + rotating refresh tokens (httpOnly cookie)
+- **Linting:** Oxlint
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Prerequisites
 
-## Project setup
+- Node.js **24.19+** (LTS)
+- npm **12+**
+- PostgreSQL **17** running locally (a real server — see below, not `npx prisma dev`)
+
+## First-time setup
 
 ```bash
-$ npm install
+# 1. Install dependencies
+npm install
+
+# 2. Approve native install scripts (needed for argon2's native binary and
+#    Prisma's engine binaries to build correctly)
+npm install-scripts approve argon2
+npm install-scripts approve @prisma/engines prisma
+
+# 3. Create the local databases (main + shadow, used by Prisma Migrate)
+psql -U postgres -h localhost -c "CREATE DATABASE project_management_dev;"
+psql -U postgres -h localhost -c "CREATE DATABASE project_management_shadow;"
+
+# 4. Copy the env template and fill in real values
+cp .env.example .env
+
+# 5. Apply the schema and generate the Prisma client
+npx prisma migrate dev
 ```
 
-## Compile and run the project
+## Running the app
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run start:dev     # watch mode, day-to-day dev
+npm run build          # compile to dist/
+npm run start:prod     # run the compiled build
 ```
 
-## Run tests
+## Tests
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run test           # unit tests (Vitest)
+npm run test:cov       # with coverage
 ```
 
-## Deployment
+## Environment variables
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+See `.env.example` for the full list. Notable ones:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+| Var                                  | Purpose                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                       | Postgres connection string                                                                        |
+| `JWT_ACCESS_SECRET`                  | Signs access tokens — generate a real random value before deploying anywhere real                 |
+| `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` | Must match your actual domain in production; `localhost` only works for local dev over plain HTTP |
+| `CLIENT_ORIGIN`                      | Used for CORS — must match wherever the React client is actually running                          |
+| `CLOUDINARY_*`                       | Task file attachments. Required at boot — the app won't start without them                        |
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+## API versioning
+
+All business routes are prefixed `/api/v1/` (global prefix `api` + URI versioning, set as the default in `main.ts`) — e.g. `POST /api/v1/auth/login/password`, `GET /api/v1/workspaces`. `GET /` and `GET /health` are deliberately excluded from both the `api` prefix and versioning (`VERSION_NEUTRAL`) and public, since infra tooling (load balancers, uptime monitors) hitting a health check shouldn't need to know or care about API prefixes/versions.
+
+## Viewing data
+
+Prisma Studio (`npx prisma studio`) has a known, currently-unpatched bug on Windows + PostgreSQL ([prisma/prisma#29348](https://github.com/prisma/prisma/issues/29348)) — it fails to load schema metadata. Use **pgAdmin** instead: register a server pointing at `localhost:5432`, credentials as in `.env`.
+
+## Project structure
+
+Standard NestJS `core` / `common` / `modules` layout:
+
+```
+src/
+  common/                 # zero/light-dependency, reused by every module
+    decorators/           # @CurrentUser, @Public, @Roles
+    guards/                # JwtAuthGuard, RolesGuard (registered globally)
+  core/                   # app-wide infrastructure (each carries a real dependency)
+    prisma/                # PrismaService — DB connection
+    workspace-access/      # shared role/workspace-resolution logic
+    logger/                 # Winston logger
+    cloudinary/             # file storage integration
+  modules/                # one folder per feature domain
+    auth/
+    workspaces/
+    projects/
+    tasks/
+    comments/
+    subtasks/
+    attachments/
+    activity-log/
+    realtime/
+    health/
+  generated/prisma/       # auto-generated Prisma client (gitignored, untouched by the above)
+  app.module.ts
+  main.ts
+prisma/
+  schema.prisma           # data model — source of truth
+  migrations/             # auto-generated SQL history, committed to git
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+**Rule of thumb for where new code goes:** if it's only used by one feature, it belongs in that feature's folder under `modules/`. If it's reused across features but carries a dependency (DB, third-party API), it belongs in `core/`. If it's a lightweight, dependency-free cross-cutting piece (a decorator, a guard, a pipe), it belongs in `common/`.

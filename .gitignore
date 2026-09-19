@@ -37,3 +37,14 @@ coverage
 # Nest observability / misc
 .nest
 tmp
+
+/src/generated/prisma
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Prisma AI-agent skill docs (auto-generated, regenerate via `prisma init`)
+/.agents/skills
+/.claude/skills
+/.windsurf/skills
+skills-lock.json
