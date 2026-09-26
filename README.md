@@ -70,15 +70,16 @@ All business routes are prefixed `/api/v1/` (global prefix `api` + URI versionin
 
 ## Deployment
 
-Deployed via [Northflank](https://northflank.com) (free tier — chosen over Render/Koyeb, which sleep on inactivity, and over Fly.io, which dropped its free tier in 2024; a sleeping backend can't hold WebSocket connections open). Northflank builds and runs the repo's `Dockerfile` directly on every push to `develop` (native Git integration — GitHub Actions is CI-only here, not the deploy mechanism).
+Deployed via [Render](https://render.com) (free tier, no credit card — Northflank was the original pick but now requires a card on file even for its free tier, and Fly.io dropped its free tier in 2024). Render builds and runs the repo's `Dockerfile` directly on every push to `develop` (native Git integration — GitHub Actions is CI-only here, not the deploy mechanism). Trade-off accepted with this choice: Render's free web services sleep after ~15 minutes of inactivity and take 30-50s to wake on the next request, which will briefly drop any open Socket.io connection during idle periods.
 
-**Northflank setup (one-time, via their dashboard):**
+**Render setup (one-time, via their dashboard):**
 
-1. Create a free account, create a project, add a service from this GitHub repo.
-2. Build type: Dockerfile (uses the repo's `Dockerfile` as-is).
-3. Branch to track: `develop`.
-4. Port: `3000` (matches `EXPOSE 3000` in the `Dockerfile`).
-5. Set these environment variables/secrets in the Northflank dashboard (never commit them):
+1. Create a free account (no card required), **New +** → **Web Service**, connect this GitHub repo.
+2. Language: change the auto-detected **Node** to **Docker** — this makes Render build from the repo's `Dockerfile` (which also runs `prisma generate`), instead of Render's own inferred `npm install`/`npm run start` flow.
+3. Branch: `develop` (defaults to `main` — change it).
+4. Instance type: **Free**.
+5. No manual port config needed — Render injects its own `PORT` env var, and `main.ts` already reads `process.env.PORT` with a `3000` fallback for local dev.
+6. Set these environment variables in the Render dashboard (via "Add from .env", or one by one — never commit them):
 
    | Var                 | Value                                                                |
    | ------------------- | -------------------------------------------------------------------- |
@@ -90,10 +91,10 @@ Deployed via [Northflank](https://northflank.com) (free tier — chosen over Ren
    | `CLIENT_ORIGIN`     | same as `WEBAUTHN_ORIGIN` — used for CORS                            |
    | `CLOUDINARY_*`      | production Cloudinary credentials                                    |
 
-6. After the first successful deploy, run `npx prisma migrate deploy` against the Neon database (from a local machine with `DATABASE_URL` pointed at Neon, or via Northflank's one-off job/shell feature) — this Dockerfile copies `prisma/` into the runtime image for exactly this purpose but does not run migrations automatically on boot.
-7. Once Vercel's URL is known, come back and correct `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN`/`CLIENT_ORIGIN` if they were set as placeholders first.
+7. After the first successful deploy, run `npx prisma migrate deploy` against the Neon database (from a local machine with `DATABASE_URL` pointed at Neon, or via Render's shell feature) — this Dockerfile copies `prisma/` into the runtime image for exactly this purpose but does not run migrations automatically on boot.
+8. Once Vercel's URL is known, come back and correct `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN`/`CLIENT_ORIGIN` if they were set as placeholders first.
 
-**Branch protection** (manual, no `gh` CLI needed): GitHub repo → Settings → Branches → Add branch protection rule → branch name pattern `develop` → enable "Require status checks to pass before merging" → search for and select `build-and-test` (this repo's CI job name) → Save. This makes CI a real gate: a PR can't merge into `develop` (and therefore can't trigger a Northflank deploy) while lint/format/build/test are failing.
+**Branch protection** (manual, no `gh` CLI needed): GitHub repo → Settings → Branches → Add branch protection rule → branch name pattern `develop` → enable "Require status checks to pass before merging" → search for and select `build-and-test` (this repo's CI job name) → Save. This makes CI a real gate: a PR can't merge into `develop` (and therefore can't trigger a Render deploy) while lint/format/build/test are failing.
 
 ## Viewing data
 
