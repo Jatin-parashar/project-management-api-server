@@ -91,10 +91,11 @@ Deployed via [Render](https://render.com) (free tier, no credit card — Northfl
    | `CLIENT_ORIGIN`     | same as `WEBAUTHN_ORIGIN` — used for CORS                            |
    | `CLOUDINARY_*`      | production Cloudinary credentials                                    |
 
-7. After the first successful deploy, run `npx prisma migrate deploy` against the Neon database (from a local machine with `DATABASE_URL` pointed at Neon, or via Render's shell feature) — this Dockerfile copies `prisma/` into the runtime image for exactly this purpose but does not run migrations automatically on boot.
-8. Once Vercel's URL is known, come back and correct `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN`/`CLIENT_ORIGIN` if they were set as placeholders first.
+7. Once Vercel's URL is known, come back and correct `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN`/`CLIENT_ORIGIN` if they were set as placeholders first.
 
 **Branch protection** (manual, no `gh` CLI needed): GitHub repo → Settings → Branches → Add branch protection rule → branch name pattern `develop` → enable "Require status checks to pass before merging" → search for and select `build-and-test` (this repo's CI job name) → Save. This makes CI a real gate: a PR can't merge into `develop` (and therefore can't trigger a Render deploy) while lint/format/build/test are failing.
+
+**Database migrations**: applied automatically by a `migrate` job in `.github/workflows/ci.yml`, which runs `prisma migrate deploy` against production on every push to `develop` (after `build-and-test` passes) — this matches Prisma's own documented guidance that `migrate deploy` belongs in CI/CD, not run manually from a local machine or chained into the container's startup command (a slow migration chained into startup risks the host platform killing the container as unresponsive before the app finishes booting). One-time setup: GitHub repo → Settings → Secrets and variables → Actions → **New repository secret** → name `DATABASE_URL`, value = the same Neon connection string used in Render.
 
 ## Viewing data
 

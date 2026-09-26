@@ -34,3 +34,23 @@ jobs:
 
       - name: Test
         run: npx vitest run --passWithNoTests
+
+  migrate:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply pending migrations to production database
+        run: npx prisma migrate deploy --config prisma7.config.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
